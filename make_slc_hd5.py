@@ -172,6 +172,45 @@ def measure_opening_angle(group):
     # Call reco_t function
     return opening_angle(n_trk_mupid, dir_x, dir_y, dir_z, mu_pid_pass)
 
+def beam_totp_angle(n_trk_mupid, dir_x, dir_y, dir_z, range_P_muon, range_P_pion, mu_pid_pass):
+    if n_trk_mupid != 2:
+        return -999.  
+    dir_x = dir_x[mu_pid_pass]
+    dir_y = dir_y[mu_pid_pass]
+    dir_z = dir_z[mu_pid_pass]
+    range_P_muon = range_P_muon[mu_pid_pass]
+    range_P_pion = range_P_pion[mu_pid_pass]
+    if(range_P_muon.size != 2):
+        print("error, dir_x.len != 2")
+        return -888.
+    
+    # -- assume first particle is muon and the other is pion
+    p_0 = range_P_muon.iloc[0]
+    p_1 = range_P_pion.iloc[1]
+    # -- if second track is longer, swap the mass assumption
+    if(range_P_muon.iloc[0] > range_P_muon.iloc[1]):
+        p_0 = range_P_pion.iloc[0]
+        p_1 = range_P_muon.iloc[1]
+
+    totpx = p_0 * dir_x.iloc[0] + p_1 * dir_x.iloc[1]
+    totpy = p_0 * dir_y.iloc[0] + p_1 * dir_y.iloc[1]
+    totpz = p_0 * dir_z.iloc[0] + p_1 * dir_z.iloc[1]
+
+    totp_cos = totpz / np.power(np.power(totpx, 2.) + np.power(totpy, 2.) + np.power(totpz, 2.) , 0.5)
+    return totp_cos
+    
+def measure_beam_totp_angle(group):
+    n_trk_mupid = group[('n_trk_mupid', '', '')].iloc[0]
+    dir_x = group[('trk', 'dir', 'x')]
+    dir_y = group[('trk', 'dir', 'y')]
+    dir_z = group[('trk', 'dir', 'z')]
+    range_P_muon = group[('trk', 'rangeP', 'p_muon')]
+    range_P_pion = group[('trk', 'rangeP', 'p_pion')]
+    mu_pid_pass = group[('trk', 'mu_pid_pass', '')]
+
+    # Call reco_t function
+    return beam_totp_angle(n_trk_mupid, dir_x, dir_y, dir_z, range_P_muon, range_P_pion, mu_pid_pass)
+
 def make_stub_df(events):
     PROTON_MASS = 0.938272
     def mag(x, y, z):
@@ -493,6 +532,11 @@ def process_file(root_file):
     opening_angle_df.index.set_names(['entry', 'rec.slc..index'], inplace=True)
     matchdf['opening_angle'] = opening_angle_df
 
+    beam_totp_angle_series = masterdf.groupby(['entry', 'rec.slc..index']).apply(measure_beam_totp_angle)
+    beam_totp_angle_df = beam_totp_angle_series.to_frame(name='reco_beam_totp_angle')
+    beam_totp_angle_df.index.set_names(['entry', 'rec.slc..index'], inplace=True)
+    matchdf['beam_totp_angle'] = beam_totp_angle_df
+    
     stubdf = make_stub_df(events)
     cut_stub_proton = stubdf.pass_proton_stub
     n_stub_proton_df = cut_stub_proton.reset_index(name='pass_proton_stub')
